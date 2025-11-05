@@ -8,7 +8,6 @@ from io import BytesIO
 from typing import Optional, List, Tuple
 from PIL import Image, ImageEnhance, ImageFilter
 import numpy as np
-import cv2
 
 from config import Config
 
@@ -292,6 +291,8 @@ class OCREngine:
             Preprocessed PIL Image
         """
         try:
+            import cv2
+
             # Convert to RGB if necessary
             if image.mode != 'RGB':
                 image = image.convert('RGB')
@@ -336,6 +337,9 @@ class OCREngine:
 
             # Convert back to PIL Image
             return Image.fromarray(morph)
+        except ImportError:
+            print("OpenCV not available, using basic preprocessing")
+            return self._basic_preprocess(image)
         except Exception as e:
             # If preprocessing fails, return original
             print(f"Advanced preprocessing failed: {e}")
@@ -352,6 +356,8 @@ class OCREngine:
             Deskewed image as numpy array
         """
         try:
+            import cv2
+
             # Find all white pixels
             coords = np.column_stack(np.where(image > 0))
 
@@ -399,6 +405,8 @@ class OCREngine:
             Quality score between 0 and 1
         """
         try:
+            import cv2
+
             img_array = np.array(image.convert('L'))
 
             # Check resolution
@@ -417,6 +425,42 @@ class OCREngine:
             quality = (resolution_score * 0.3 + contrast_score * 0.4 + sharpness_score * 0.3)
 
             return quality
+        except ImportError:
+            # Fallback without OpenCV
+            img_array = np.array(image.convert('L'))
+            height, width = img_array.shape
+            resolution_score = min(1.0, (height * width) / (1000 * 1000))
+            contrast_score = img_array.std() / 128.0
+            contrast_score = min(1.0, contrast_score)
+            return (resolution_score * 0.5 + contrast_score * 0.5)
         except Exception as e:
             print(f"Quality estimation failed: {e}")
             return 0.5
+
+    def _basic_preprocess(self, image: Image.Image) -> Image.Image:
+        """
+        Basic preprocessing without OpenCV (fallback)
+
+        Args:
+            image: Input PIL Image
+
+        Returns:
+            Preprocessed PIL Image
+        """
+        try:
+            # Convert to grayscale
+            if image.mode != 'L':
+                image = image.convert('L')
+
+            # Enhance contrast
+            from PIL import ImageOps
+            image = ImageOps.autocontrast(image)
+
+            # Convert to binary (simple thresholding)
+            threshold = 128
+            image = image.point(lambda x: 255 if x > threshold else 0, mode='1')
+
+            return image.convert('L')
+        except Exception as e:
+            print(f"Basic preprocessing failed: {e}")
+            return image
