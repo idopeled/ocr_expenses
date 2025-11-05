@@ -29,7 +29,13 @@ class Config:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
     # Supported image formats
-    SUPPORTED_FORMATS = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff"]
+    SUPPORTED_IMAGE_FORMATS = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff"]
+
+    # Supported document formats
+    SUPPORTED_PDF_FORMATS = [".pdf"]
+
+    # All supported formats
+    SUPPORTED_FORMATS = SUPPORTED_IMAGE_FORMATS + SUPPORTED_PDF_FORMATS
 
     # Invoice fields
     INVOICE_FIELDS = [

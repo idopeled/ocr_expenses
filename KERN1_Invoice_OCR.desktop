@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=KERN1 Invoice OCR
+Comment=Invoice OCR and Excel Export Application
+Exec=python3 %k/../launch_app.py
+Icon=%k/../icon.png
+Terminal=true
+Categories=Office;Finance;

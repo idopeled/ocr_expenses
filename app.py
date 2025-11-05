@@ -1,6 +1,7 @@
 """
 KERN1 Invoice OCR Application
 Main Streamlit application for processing invoices and generating Excel exports
+Enhanced with PDF support and multi-pass OCR
 """
 import streamlit as st
 from pathlib import Path
@@ -12,6 +13,7 @@ from config import Config
 from ocr_engine import OCREngine
 from invoice_parser import InvoiceParser
 from excel_exporter import ExcelExporter
+from pdf_handler import PDFHandler
 
 
 class InvoiceOCRApp:
@@ -23,6 +25,7 @@ class InvoiceOCRApp:
         self.ocr_engine = OCREngine()
         self.parser = InvoiceParser()
         self.exporter = ExcelExporter()
+        self.pdf_handler = PDFHandler()
 
         # Initialize session state
         if 'invoices' not in st.session_state:
@@ -31,6 +34,8 @@ class InvoiceOCRApp:
             st.session_state.current_invoice = None
         if 'ocr_text' not in st.session_state:
             st.session_state.ocr_text = ""
+        if 'current_images' not in st.session_state:
+            st.session_state.current_images = []
 
     def run(self):
         """Main application loop"""
@@ -98,29 +103,49 @@ class InvoiceOCRApp:
 
     def _render_upload_tab(self):
         """Render upload and processing tab"""
-        st.header("Upload Invoice Image")
+        st.header("Upload Invoice Document")
 
-        # File uploader
+        # File uploader with PDF support
         uploaded_file = st.file_uploader(
-            "Choose an invoice image (PNG, JPG, GIF)",
-            type=['png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff'],
-            help="Upload a scanned invoice image for OCR processing"
+            "Choose an invoice (Image or PDF)",
+            type=['png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'pdf'],
+            help="Upload a scanned invoice image or PDF for OCR processing"
         )
 
         if uploaded_file:
+            # Check file type
+            file_ext = Path(uploaded_file.name).suffix.lower()
+            is_pdf = file_ext == '.pdf'
+
             col1, col2 = st.columns([1, 1])
 
             with col1:
-                st.subheader("📷 Image Preview")
-                image = Image.open(uploaded_file)
-                st.image(image, use_container_width=True)
+                st.subheader("📄 Document Preview" if is_pdf else "📷 Image Preview")
+
+                if is_pdf:
+                    # Handle PDF
+                    self._handle_pdf_upload(uploaded_file, col1)
+                else:
+                    # Handle image
+                    image = Image.open(uploaded_file)
+                    st.session_state.current_images = [image]
+
+                    st.image(image, use_container_width=True)
+
+                    # Show image quality
+                    quality = self.ocr_engine.get_image_quality_score(image)
+                    quality_color = "green" if quality > 0.6 else "orange" if quality > 0.4 else "red"
+                    st.markdown(f"**Image Quality:** :{quality_color}[{'■' * int(quality * 10)}] {quality:.1%}")
 
                 # OCR options
                 st.markdown("---")
-                use_preprocessing = st.checkbox(
-                    "🔧 Preprocess image (improve OCR accuracy)",
-                    value=True
+
+                use_multipass = st.checkbox(
+                    "🚀 Multi-pass OCR (best accuracy, slower)",
+                    value=True,
+                    help="Process the image multiple times with different techniques for best results"
                 )
+
                 use_ai = st.checkbox(
                     "🤖 Use AI extraction (requires OpenAI API key)",
                     value=Config.is_openai_available(),
@@ -128,7 +153,12 @@ class InvoiceOCRApp:
                 )
 
                 if st.button("🔍 Process Invoice", type="primary", use_container_width=True):
-                    self._process_invoice(image, use_preprocessing, use_ai)
+                    if st.session_state.current_images:
+                        self._process_invoice(
+                            st.session_state.current_images,
+                            multi_pass=use_multipass,
+                            use_ai=use_ai
+                        )
 
             with col2:
                 st.subheader("📝 Extracted Data")
@@ -137,6 +167,46 @@ class InvoiceOCRApp:
                     self._render_invoice_form(editable=True)
                 else:
                     st.info("👆 Click 'Process Invoice' to extract data")
+
+    def _handle_pdf_upload(self, uploaded_file, container):
+        """Handle PDF file upload and conversion"""
+        try:
+            # Save PDF temporarily
+            pdf_path = self.pdf_handler.save_uploaded_pdf(uploaded_file, Config.UPLOAD_DIR)
+
+            # Get page count
+            page_count = self.pdf_handler.get_page_count(pdf_path)
+
+            container.info(f"📄 PDF Document ({page_count} page{'s' if page_count != 1 else ''})")
+
+            # Try to extract text directly first
+            if self.pdf_handler.is_text_based_pdf(pdf_path):
+                container.success("✅ This is a text-based PDF. Text can be extracted directly!")
+                direct_text = self.pdf_handler.extract_text_from_pdf(pdf_path)
+                if direct_text:
+                    st.session_state.ocr_text = direct_text
+                    st.session_state.current_images = []  # No need for images
+            else:
+                container.info("Converting PDF to images for OCR...")
+
+                # Convert PDF to images
+                with st.spinner("Converting PDF pages to images..."):
+                    images = self.pdf_handler.pdf_to_images(pdf_path, dpi=300)
+                    st.session_state.current_images = images
+
+                container.success(f"✅ Converted {len(images)} page(s) to images")
+
+                # Show first page preview
+                if images:
+                    container.markdown("**Page 1 Preview:**")
+                    container.image(images[0], use_container_width=True)
+
+                    if len(images) > 1:
+                        container.info(f"Will process all {len(images)} pages")
+
+        except Exception as e:
+            container.error(f"❌ Error processing PDF: {str(e)}")
+            st.session_state.current_images = []
 
     def _render_invoices_tab(self):
         """Render invoices list tab"""
@@ -201,6 +271,14 @@ class InvoiceOCRApp:
             self.ocr_engine = OCREngine(selected_engine)
             st.success(f"OCR engine changed to: {selected_engine}")
 
+        # Engine descriptions
+        st.markdown("""
+        **Engine Comparison:**
+        - **Tesseract**: Fast, good for standard printed invoices
+        - **EasyOCR**: Better accuracy, works well with various layouts
+        - **OpenAI**: Best accuracy (requires API key and costs money)
+        """)
+
         # Language settings
         st.subheader("Languages")
         st.info("Supported languages: English (eng), Dutch (nld)")
@@ -215,6 +293,19 @@ class InvoiceOCRApp:
             st.warning("⚠️ OpenAI API key not configured")
             st.info("Add OPENAI_API_KEY to .env file to enable AI-powered extraction")
 
+        # Performance settings
+        st.subheader("Performance Settings")
+        st.markdown("""
+        **Multi-pass OCR** processes the image 4 times with different preprocessing:
+        1. Original image
+        2. Enhanced contrast and sharpness
+        3. Advanced denoising and binarization
+        4. Sharpened version
+
+        The longest (most complete) result is used. This significantly improves accuracy
+        but takes longer to process.
+        """)
+
         # Directories
         st.subheader("Directories")
         st.text(f"Uploads: {Config.UPLOAD_DIR}")
@@ -226,36 +317,53 @@ class InvoiceOCRApp:
         st.markdown(f"""
         **{Config.APP_NAME}**
 
-        Version: 1.0.0
+        Version: 2.0.0
 
         Features:
         - Multi-language OCR (Dutch/English)
-        - AI-powered data extraction
+        - Multi-pass extraction for supercharged accuracy
+        - PDF support (text-based and image-based)
+        - AI-powered data extraction (optional)
         - Excel export with professional formatting
-        - Support for PNG, JPG, GIF, BMP, TIFF formats
+        - Support for PNG, JPG, GIF, BMP, TIFF, PDF formats
+        - Advanced image preprocessing (denoising, deskewing, CLAHE)
 
         Built with Python, Streamlit, and Tesseract/EasyOCR
         """)
 
-    def _process_invoice(self, image: Image.Image, preprocess: bool, use_ai: bool):
-        """Process invoice image"""
+    def _process_invoice(
+        self,
+        images: List[Image.Image],
+        multi_pass: bool = True,
+        use_ai: bool = False
+    ):
+        """Process invoice images or text"""
         with st.spinner("🔍 Processing invoice..."):
             try:
-                # Step 1: Preprocess if requested
-                if preprocess:
-                    st.info("Preprocessing image...")
-                    image = self.ocr_engine.preprocess_image(image)
+                all_text = []
 
-                # Step 2: Extract text with OCR
-                st.info(f"Extracting text with {self.ocr_engine.engine}...")
-                text = self.ocr_engine.extract_text(image)
-                st.session_state.ocr_text = text
+                # Check if we already have extracted text (from text-based PDF)
+                if st.session_state.ocr_text and not images:
+                    text = st.session_state.ocr_text
+                else:
+                    # Process each image
+                    for idx, image in enumerate(images):
+                        if len(images) > 1:
+                            st.info(f"Processing page {idx + 1}/{len(images)}...")
 
-                # Step 3: Parse invoice data
+                        # Extract text with OCR
+                        page_text = self.ocr_engine.extract_text(image, multi_pass=multi_pass)
+                        all_text.append(page_text)
+
+                    # Combine text from all pages
+                    text = '\n\n--- PAGE BREAK ---\n\n'.join(all_text)
+                    st.session_state.ocr_text = text
+
+                # Parse invoice data
                 st.info("Parsing invoice data...")
                 invoice_data = self.parser.parse(text, use_ai=use_ai)
 
-                # Step 4: Validate
+                # Validate
                 errors = self.parser.validate_data(invoice_data)
                 if errors:
                     st.warning(f"Validation warnings: {', '.join(errors.keys())}")
@@ -267,6 +375,8 @@ class InvoiceOCRApp:
 
             except Exception as e:
                 st.error(f"❌ Error processing invoice: {str(e)}")
+                import traceback
+                st.error(traceback.format_exc())
 
     def _render_invoice_form(self, editable: bool = True):
         """Render invoice data form"""
@@ -338,6 +448,7 @@ class InvoiceOCRApp:
                 if st.button("🗑️ Discard", use_container_width=True):
                     st.session_state.current_invoice = None
                     st.session_state.ocr_text = ""
+                    st.session_state.current_images = []
                     st.rerun()
 
     def _display_invoice_details(self, invoice: Dict):
@@ -373,6 +484,7 @@ class InvoiceOCRApp:
             # Clear current
             st.session_state.current_invoice = None
             st.session_state.ocr_text = ""
+            st.session_state.current_images = []
 
             st.success("✅ Invoice saved!")
             st.rerun()
