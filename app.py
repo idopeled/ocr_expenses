@@ -8,6 +8,7 @@ from pathlib import Path
 from PIL import Image
 from datetime import datetime
 from typing import List, Dict, Optional
+import time
 
 from config import Config
 from ocr_engine import OCREngine
@@ -286,12 +287,62 @@ class InvoiceOCRApp:
 
         # OpenAI settings
         st.subheader("OpenAI Integration")
+
+        # Show current status
         if Config.is_openai_available():
             st.success("✅ OpenAI API key is configured")
             st.info("AI-powered extraction is available for improved accuracy")
+
+            # Option to remove/change key
+            if st.button("🔄 Change API Key"):
+                Config.OPENAI_API_KEY = None
+                st.rerun()
         else:
             st.warning("⚠️ OpenAI API key not configured")
-            st.info("Add OPENAI_API_KEY to .env file to enable AI-powered extraction")
+            st.info("Enter your OpenAI API key below to enable AI-powered extraction")
+
+        # API Key input form
+        with st.form("openai_config"):
+            st.markdown("**Configure OpenAI API Key**")
+
+            api_key = st.text_input(
+                "OpenAI API Key",
+                type="password",
+                placeholder="sk-...",
+                help="Get your API key from https://platform.openai.com/api-keys"
+            )
+
+            col1, col2 = st.columns([1, 3])
+            with col1:
+                submitted = st.form_submit_button("💾 Save Key")
+            with col2:
+                if Config.is_openai_available():
+                    if st.form_submit_button("🗑️ Remove Key"):
+                        self._remove_openai_key()
+
+            if submitted and api_key:
+                if api_key.startswith('sk-'):
+                    # Save to .env file
+                    self._save_openai_key(api_key)
+                    st.success("✅ OpenAI API key saved! Reloading...")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error("❌ Invalid API key format. OpenAI keys start with 'sk-'")
+
+        # Instructions
+        with st.expander("How to get an OpenAI API key"):
+            st.markdown("""
+            1. Go to https://platform.openai.com/signup
+            2. Sign up or log in
+            3. Navigate to API Keys: https://platform.openai.com/api-keys
+            4. Click "Create new secret key"
+            5. Copy the key (starts with 'sk-')
+            6. Paste it in the field above and click Save
+
+            **Note:** You'll need to add billing information to use the API.
+            Costs are typically $0.01-0.02 per invoice.
+            """)
 
         # Performance settings
         st.subheader("Performance Settings")
@@ -523,6 +574,57 @@ class InvoiceOCRApp:
 
         except Exception as e:
             st.error(f"❌ Export failed: {str(e)}")
+
+    def _save_openai_key(self, api_key: str):
+        """Save OpenAI API key to .env file"""
+        env_file = Config.BASE_DIR / ".env"
+
+        # Read existing .env content
+        existing_lines = []
+        if env_file.exists():
+            with open(env_file, 'r') as f:
+                existing_lines = f.readlines()
+
+        # Update or add OPENAI_API_KEY
+        key_found = False
+        new_lines = []
+        for line in existing_lines:
+            if line.startswith('OPENAI_API_KEY='):
+                new_lines.append(f'OPENAI_API_KEY={api_key}\n')
+                key_found = True
+            else:
+                new_lines.append(line)
+
+        if not key_found:
+            new_lines.append(f'OPENAI_API_KEY={api_key}\n')
+
+        # Write back to file
+        with open(env_file, 'w') as f:
+            f.writelines(new_lines)
+
+        # Update config
+        Config.OPENAI_API_KEY = api_key
+
+    def _remove_openai_key(self):
+        """Remove OpenAI API key from .env file"""
+        env_file = Config.BASE_DIR / ".env"
+
+        if env_file.exists():
+            # Read existing content
+            with open(env_file, 'r') as f:
+                lines = f.readlines()
+
+            # Remove OPENAI_API_KEY line
+            new_lines = [line for line in lines if not line.startswith('OPENAI_API_KEY=')]
+
+            # Write back
+            with open(env_file, 'w') as f:
+                f.writelines(new_lines)
+
+        # Update config
+        Config.OPENAI_API_KEY = None
+        st.success("✅ OpenAI API key removed")
+        st.rerun()
 
 
 def main():

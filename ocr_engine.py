@@ -142,8 +142,23 @@ class OCREngine:
 
             # Initialize reader (cached)
             if self._ocr_reader is None:
+                # EasyOCR uses language codes: 'en' for English, 'nl' for Dutch
+                # Convert our codes (eng, nld) to EasyOCR codes
+                lang_map = {
+                    'eng': 'en',
+                    'nld': 'nl',
+                    'en': 'en',
+                    'nl': 'nl'
+                }
+
+                # Convert language codes and ensure it's a list
+                easyocr_langs = [lang_map.get(lang.strip(), lang.strip())
+                                for lang in self.languages]
+
+                print(f"Initializing EasyOCR with languages: {easyocr_langs}")
+
                 self._ocr_reader = easyocr.Reader(
-                    self.languages,
+                    easyocr_langs,
                     gpu=False,
                     verbose=False
                 )
