@@ -56,10 +56,14 @@ class InvoiceParser:
         Returns:
             Dictionary with extracted invoice fields
         """
-        if use_ai and Config.is_openai_available():
-            return self._parse_with_ai(text)
-        else:
-            return self._parse_with_patterns(text)
+        if use_ai:
+            # Try Claude first (better for structured data), then OpenAI
+            if Config.is_anthropic_available():
+                return self._parse_with_claude(text)
+            elif Config.is_openai_available():
+                return self._parse_with_openai(text)
+
+        return self._parse_with_patterns(text)
 
     def _parse_with_patterns(self, text: str) -> Dict[str, Optional[str]]:
         """Extract invoice data using regex patterns"""
@@ -77,7 +81,7 @@ class InvoiceParser:
 
         return result
 
-    def _parse_with_ai(self, text: str) -> Dict[str, Optional[str]]:
+    def _parse_with_openai(self, text: str) -> Dict[str, Optional[str]]:
         """Extract invoice data using OpenAI"""
         try:
             from openai import OpenAI
@@ -116,7 +120,48 @@ VAT_AMOUNT: <value or UNKNOWN>
             return self._parse_ai_response(content)
 
         except Exception as e:
-            print(f"AI parsing failed, falling back to pattern matching: {e}")
+            print(f"OpenAI parsing failed, falling back to pattern matching: {e}")
+            return self._parse_with_patterns(text)
+
+    def _parse_with_claude(self, text: str) -> Dict[str, Optional[str]]:
+        """Extract invoice data using Claude (Anthropic) - Better for structured data!"""
+        try:
+            import anthropic
+
+            client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
+
+            prompt = f"""Extract the following information from this invoice text:
+1. Invoice number
+2. Invoice date (format as YYYY-MM-DD)
+3. Supplier/Company name
+4. Service description (brief summary of what was invoiced)
+5. Total amount (number only, without currency symbol)
+6. VAT amount (number only, without currency symbol)
+
+Invoice text:
+{text}
+
+Return the information in this exact format:
+INVOICE_NUMBER: <value or UNKNOWN>
+INVOICE_DATE: <value or UNKNOWN>
+SUPPLIER_NAME: <value or UNKNOWN>
+SERVICE_DESCRIPTION: <value or UNKNOWN>
+TOTAL_AMOUNT: <value or UNKNOWN>
+VAT_AMOUNT: <value or UNKNOWN>
+
+Be precise and extract exact values. If a field is not present, use UNKNOWN."""
+
+            response = client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=500,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            content = response.content[0].text
+            return self._parse_ai_response(content)
+
+        except Exception as e:
+            print(f"Claude parsing failed, falling back to pattern matching: {e}")
             return self._parse_with_patterns(text)
 
     def _parse_ai_response(self, response: str) -> Dict[str, Optional[str]]:

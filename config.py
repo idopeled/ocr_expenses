@@ -28,6 +28,9 @@ class Config:
     # OpenAI settings (optional)
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+    # Anthropic/Claude settings (optional)
+    ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+
     # Supported image formats
     SUPPORTED_IMAGE_FORMATS = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff"]
 
@@ -67,3 +70,13 @@ class Config:
     def is_openai_available(cls):
         """Check if OpenAI API key is configured"""
         return cls.OPENAI_API_KEY and cls.OPENAI_API_KEY != "your_openai_api_key_here"
+
+    @classmethod
+    def is_anthropic_available(cls):
+        """Check if Anthropic API key is configured"""
+        return cls.ANTHROPIC_API_KEY and cls.ANTHROPIC_API_KEY != "your_anthropic_api_key_here"
+
+    @classmethod
+    def is_ai_available(cls):
+        """Check if any AI API is configured"""
+        return cls.is_openai_available() or cls.is_anthropic_available()

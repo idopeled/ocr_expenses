@@ -257,6 +257,8 @@ class InvoiceOCRApp:
         # OCR Engine settings
         st.subheader("OCR Engine")
         ocr_options = ['tesseract', 'easyocr']
+        if Config.is_anthropic_available():
+            ocr_options.append('claude')
         if Config.is_openai_available():
             ocr_options.append('openai')
 
@@ -277,7 +279,10 @@ class InvoiceOCRApp:
         **Engine Comparison:**
         - **Tesseract**: Fast, good for standard printed invoices
         - **EasyOCR**: Better accuracy, works well with various layouts
-        - **OpenAI**: Best accuracy (requires API key and costs money)
+        - **Claude**: Best for invoices! Excellent structured data extraction (requires API key)
+        - **OpenAI**: Very good accuracy (requires API key and costs money)
+
+        **💡 Recommended:** Use Claude if you have credits - it's excellent for invoices!
         """)
 
         # Language settings
@@ -285,27 +290,84 @@ class InvoiceOCRApp:
         st.info("Supported languages: English (eng), Dutch (nld)")
         st.code(f"Current languages: {', '.join(Config.OCR_LANGUAGES)}")
 
-        # OpenAI settings
-        st.subheader("OpenAI Integration")
+        # AI Integration
+        st.subheader("AI Integration")
 
-        # Show current status
+        # Claude (Anthropic) Configuration
+        st.markdown("### 🤖 Claude (Anthropic) - Recommended!")
+
+        if Config.is_anthropic_available():
+            st.success("✅ Claude API key is configured")
+            st.info("Claude vision is active - Excellent for invoice extraction!")
+
+            if st.button("🔄 Change Claude Key", key="change_claude"):
+                Config.ANTHROPIC_API_KEY = None
+                st.rerun()
+        else:
+            st.warning("⚠️ Claude API key not configured")
+            st.info("Enter your Anthropic API key below to use Claude (recommended for invoices)")
+
+        with st.form("claude_config"):
+            st.markdown("**Configure Claude API Key**")
+
+            claude_key = st.text_input(
+                "Anthropic API Key",
+                type="password",
+                placeholder="sk-ant-...",
+                help="Get your API key from https://console.anthropic.com/"
+            )
+
+            col1, col2 = st.columns([1, 3])
+            with col1:
+                submitted_claude = st.form_submit_button("💾 Save Claude Key")
+            with col2:
+                if Config.is_anthropic_available():
+                    if st.form_submit_button("🗑️ Remove Claude Key"):
+                        self._remove_anthropic_key()
+
+            if submitted_claude and claude_key:
+                if claude_key.startswith('sk-ant-'):
+                    self._save_anthropic_key(claude_key)
+                    st.success("✅ Claude API key saved! Reloading...")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error("❌ Invalid API key format. Anthropic keys start with 'sk-ant-'")
+
+        with st.expander("How to get a Claude API key"):
+            st.markdown("""
+            1. Go to https://console.anthropic.com/
+            2. Sign up or log in
+            3. Navigate to API Keys
+            4. Click "Create Key"
+            5. Copy the key (starts with 'sk-ant-')
+            6. Paste it in the field above and click Save
+
+            **Why Claude?**
+            - ✅ Excellent for structured data extraction
+            - ✅ Very accurate for invoices
+            - ✅ If you have credits, use them here!
+            - 💰 Costs: ~$0.01-0.02 per invoice (similar to OpenAI)
+            """)
+
+        st.markdown("---")
+
+        # OpenAI Configuration
+        st.markdown("### OpenAI (Alternative)")
+
         if Config.is_openai_available():
             st.success("✅ OpenAI API key is configured")
-            st.info("AI-powered extraction is available for improved accuracy")
 
-            # Option to remove/change key
-            if st.button("🔄 Change API Key"):
+            if st.button("🔄 Change OpenAI Key", key="change_openai"):
                 Config.OPENAI_API_KEY = None
                 st.rerun()
         else:
-            st.warning("⚠️ OpenAI API key not configured")
-            st.info("Enter your OpenAI API key below to enable AI-powered extraction")
+            st.info("OpenAI is an alternative to Claude")
 
-        # API Key input form
         with st.form("openai_config"):
             st.markdown("**Configure OpenAI API Key**")
 
-            api_key = st.text_input(
+            openai_key = st.text_input(
                 "OpenAI API Key",
                 type="password",
                 placeholder="sk-...",
@@ -314,23 +376,21 @@ class InvoiceOCRApp:
 
             col1, col2 = st.columns([1, 3])
             with col1:
-                submitted = st.form_submit_button("💾 Save Key")
+                submitted_openai = st.form_submit_button("💾 Save OpenAI Key")
             with col2:
                 if Config.is_openai_available():
-                    if st.form_submit_button("🗑️ Remove Key"):
+                    if st.form_submit_button("🗑️ Remove OpenAI Key"):
                         self._remove_openai_key()
 
-            if submitted and api_key:
-                if api_key.startswith('sk-'):
-                    # Save to .env file
-                    self._save_openai_key(api_key)
+            if submitted_openai and openai_key:
+                if openai_key.startswith('sk-'):
+                    self._save_openai_key(openai_key)
                     st.success("✅ OpenAI API key saved! Reloading...")
                     time.sleep(1)
                     st.rerun()
                 else:
                     st.error("❌ Invalid API key format. OpenAI keys start with 'sk-'")
 
-        # Instructions
         with st.expander("How to get an OpenAI API key"):
             st.markdown("""
             1. Go to https://platform.openai.com/signup
@@ -339,9 +399,6 @@ class InvoiceOCRApp:
             4. Click "Create new secret key"
             5. Copy the key (starts with 'sk-')
             6. Paste it in the field above and click Save
-
-            **Note:** You'll need to add billing information to use the API.
-            Costs are typically $0.01-0.02 per invoice.
             """)
 
         # Performance settings
@@ -624,6 +681,57 @@ class InvoiceOCRApp:
         # Update config
         Config.OPENAI_API_KEY = None
         st.success("✅ OpenAI API key removed")
+        st.rerun()
+
+    def _save_anthropic_key(self, api_key: str):
+        """Save Anthropic API key to .env file"""
+        env_file = Config.BASE_DIR / ".env"
+
+        # Read existing .env content
+        existing_lines = []
+        if env_file.exists():
+            with open(env_file, 'r') as f:
+                existing_lines = f.readlines()
+
+        # Update or add ANTHROPIC_API_KEY
+        key_found = False
+        new_lines = []
+        for line in existing_lines:
+            if line.startswith('ANTHROPIC_API_KEY='):
+                new_lines.append(f'ANTHROPIC_API_KEY={api_key}\n')
+                key_found = True
+            else:
+                new_lines.append(line)
+
+        if not key_found:
+            new_lines.append(f'ANTHROPIC_API_KEY={api_key}\n')
+
+        # Write back to file
+        with open(env_file, 'w') as f:
+            f.writelines(new_lines)
+
+        # Update config
+        Config.ANTHROPIC_API_KEY = api_key
+
+    def _remove_anthropic_key(self):
+        """Remove Anthropic API key from .env file"""
+        env_file = Config.BASE_DIR / ".env"
+
+        if env_file.exists():
+            # Read existing content
+            with open(env_file, 'r') as f:
+                lines = f.readlines()
+
+            # Remove ANTHROPIC_API_KEY line
+            new_lines = [line for line in lines if not line.startswith('ANTHROPIC_API_KEY=')]
+
+            # Write back
+            with open(env_file, 'w') as f:
+                f.writelines(new_lines)
+
+        # Update config
+        Config.ANTHROPIC_API_KEY = None
+        st.success("✅ Claude API key removed")
         st.rerun()
 
 

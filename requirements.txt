@@ -16,6 +16,7 @@ pypdfium2>=4.26.0
 
 # AI/LLM for intelligent extraction (optional)
 openai>=1.12.0
+anthropic>=0.18.0
 
 # Image processing
 opencv-python-headless>=4.9.0

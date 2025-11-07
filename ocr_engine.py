@@ -20,7 +20,7 @@ class OCREngine:
         Initialize OCR engine
 
         Args:
-            engine: OCR engine to use ('tesseract', 'easyocr', 'openai')
+            engine: OCR engine to use ('tesseract', 'easyocr', 'openai', 'claude')
         """
         self.engine = engine or Config.OCR_ENGINE
         self.languages = Config.OCR_LANGUAGES
@@ -37,9 +37,12 @@ class OCREngine:
         Returns:
             Extracted text as string
         """
-        if self.engine == "openai":
-            # OpenAI doesn't benefit from multi-pass
-            return self._extract_with_openai(image)
+        if self.engine in ["openai", "claude"]:
+            # AI engines don't benefit from multi-pass
+            if self.engine == "openai":
+                return self._extract_with_openai(image)
+            else:
+                return self._extract_with_claude(image)
 
         if multi_pass:
             return self._multi_pass_extraction(image)
@@ -249,6 +252,50 @@ class OCREngine:
             return response.choices[0].message.content.strip()
         except Exception as e:
             raise RuntimeError(f"OpenAI Vision API failed: {str(e)}")
+
+    def _extract_with_claude(self, image: Image.Image) -> str:
+        """Extract text using Claude (Anthropic) Vision API"""
+        try:
+            import anthropic
+
+            if not Config.is_anthropic_available():
+                raise ValueError("Anthropic API key not configured")
+
+            client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
+
+            # Convert image to base64
+            buffered = BytesIO()
+            image.save(buffered, format="PNG")
+            img_base64 = base64.b64encode(buffered.getvalue()).decode()
+
+            # Call Claude Vision API
+            response = client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=2000,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/png",
+                                    "data": img_base64
+                                }
+                            },
+                            {
+                                "type": "text",
+                                "text": "Extract all text from this invoice image. Return the raw text exactly as it appears, preserving the layout and structure."
+                            }
+                        ]
+                    }
+                ]
+            )
+
+            return response.content[0].text.strip()
+        except Exception as e:
+            raise RuntimeError(f"Claude Vision API failed: {str(e)}")
 
     def preprocess_image(self, image: Image.Image) -> Image.Image:
         """
