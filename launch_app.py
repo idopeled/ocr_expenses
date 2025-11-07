@@ -10,6 +10,107 @@ import webbrowser
 import time
 
 
+def check_and_install_tesseract():
+    """Check if Tesseract is installed and offer to install it"""
+    print("Checking for Tesseract OCR...")
+
+    # Check if tesseract is already installed
+    try:
+        result = subprocess.run(
+            ["tesseract", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            # Extract version from output
+            version_line = result.stdout.split('\n')[0]
+            print(f"✅ {version_line}")
+            return True
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    # Tesseract not found
+    print("⚠️  Tesseract OCR not found")
+    print()
+    print("Tesseract is recommended for best OCR accuracy.")
+    print("Without it, the app will use EasyOCR (which still works well).")
+    print()
+
+    # Check if Homebrew is available
+    try:
+        result = subprocess.run(
+            ["brew", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        has_brew = result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        has_brew = False
+
+    if has_brew:
+        print("🍺 Homebrew detected!")
+        print()
+        response = input("Would you like to install Tesseract now? (y/n): ").strip().lower()
+
+        if response in ['y', 'yes']:
+            print()
+            print("📦 Installing Tesseract OCR with Homebrew...")
+            print("This may take a few minutes...")
+            print()
+
+            try:
+                # Install tesseract and language packs
+                result = subprocess.run(
+                    ["brew", "install", "tesseract", "tesseract-lang"],
+                    check=False,
+                    timeout=600  # 10 minute timeout
+                )
+
+                if result.returncode == 0:
+                    print()
+                    print("✅ Tesseract OCR installed successfully!")
+                    print()
+                    return True
+                else:
+                    print()
+                    print("⚠️  Tesseract installation had some issues, but continuing...")
+                    print()
+            except subprocess.TimeoutExpired:
+                print()
+                print("⚠️  Installation timed out. You can install manually later with:")
+                print("    brew install tesseract tesseract-lang")
+                print()
+            except Exception as e:
+                print()
+                print(f"⚠️  Installation failed: {e}")
+                print("You can install manually later with:")
+                print("    brew install tesseract tesseract-lang")
+                print()
+        else:
+            print()
+            print("Skipping Tesseract installation.")
+            print("The app will use EasyOCR instead (no installation needed).")
+            print()
+            print("To install Tesseract later, run:")
+            print("    brew install tesseract tesseract-lang")
+            print()
+    else:
+        print("Homebrew not found. Tesseract requires Homebrew for easy installation.")
+        print()
+        print("Option 1: Install Homebrew, then Tesseract:")
+        print('  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"')
+        print("  brew install tesseract tesseract-lang")
+        print()
+        print("Option 2: Use EasyOCR (no additional installation needed)")
+        print("  Just continue - the app will work with EasyOCR!")
+        print()
+        input("Press Enter to continue...")
+
+    return False
+
+
 def main():
     """Launch the Streamlit application"""
     # Get the directory where this script is located
@@ -89,6 +190,9 @@ def main():
     if not env_file.exists() and (app_dir / ".env.example").exists():
         import shutil
         shutil.copy(app_dir / ".env.example", env_file)
+
+    # Check for Tesseract OCR
+    check_and_install_tesseract()
 
     print("✅ Starting KERN1 Invoice OCR Application...")
     print()
