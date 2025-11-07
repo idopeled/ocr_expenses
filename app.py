@@ -148,18 +148,22 @@ class InvoiceOCRApp:
                 )
 
                 use_ai = st.checkbox(
-                    "🤖 Use AI extraction (requires OpenAI API key)",
-                    value=Config.is_openai_available(),
-                    disabled=not Config.is_openai_available()
+                    "🤖 Use AI extraction (recommended)",
+                    value=Config.is_ai_available(),
+                    disabled=not Config.is_ai_available(),
+                    help="Uses Claude or OpenAI to extract invoice data with high accuracy"
                 )
 
                 if st.button("🔍 Process Invoice", type="primary", use_container_width=True):
-                    if st.session_state.current_images:
+                    # Process if we have images OR if we have OCR text from text-based PDF
+                    if st.session_state.current_images or st.session_state.ocr_text:
                         self._process_invoice(
                             st.session_state.current_images,
                             multi_pass=use_multipass,
                             use_ai=use_ai
                         )
+                    else:
+                        st.error("❌ No document loaded. Please upload an invoice first.")
 
             with col2:
                 st.subheader("📝 Extracted Data")
@@ -182,11 +186,16 @@ class InvoiceOCRApp:
 
             # Try to extract text directly first
             if self.pdf_handler.is_text_based_pdf(pdf_path):
-                container.success("✅ This is a text-based PDF. Text can be extracted directly!")
+                container.success("✅ This is a text-based PDF. Extracting text directly...")
                 direct_text = self.pdf_handler.extract_text_from_pdf(pdf_path)
                 if direct_text:
                     st.session_state.ocr_text = direct_text
                     st.session_state.current_images = []  # No need for images
+                    container.info("📄 Text extracted successfully. Click 'Process Invoice' to extract invoice data →")
+
+                    # Show preview of extracted text
+                    with container.expander("Preview extracted text"):
+                        st.text_area("Raw text from PDF", direct_text[:500] + "..." if len(direct_text) > 500 else direct_text, height=150, disabled=True)
             else:
                 container.info("Converting PDF to images for OCR...")
 
@@ -452,9 +461,11 @@ class InvoiceOCRApp:
 
                 # Check if we already have extracted text (from text-based PDF)
                 if st.session_state.ocr_text and not images:
+                    st.info("Using text extracted from PDF...")
                     text = st.session_state.ocr_text
                 else:
                     # Process each image
+                    st.info(f"Extracting text with OCR ({self.ocr_engine.engine})...")
                     for idx, image in enumerate(images):
                         if len(images) > 1:
                             st.info(f"Processing page {idx + 1}/{len(images)}...")
@@ -468,7 +479,16 @@ class InvoiceOCRApp:
                     st.session_state.ocr_text = text
 
                 # Parse invoice data
-                st.info("Parsing invoice data...")
+                if use_ai:
+                    if Config.is_anthropic_available():
+                        st.info("Extracting invoice fields with Claude AI...")
+                    elif Config.is_openai_available():
+                        st.info("Extracting invoice fields with OpenAI...")
+                    else:
+                        st.info("Extracting invoice fields with pattern matching...")
+                else:
+                    st.info("Extracting invoice fields with pattern matching...")
+
                 invoice_data = self.parser.parse(text, use_ai=use_ai)
 
                 # Validate
