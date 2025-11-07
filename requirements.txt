@@ -20,7 +20,6 @@ openai>=1.12.0
 # Image processing
 opencv-python-headless>=4.9.0
 numpy>=1.24.0
-scikit-image>=0.22.0
 
 # Date parsing
 python-dateutil>=2.8.0

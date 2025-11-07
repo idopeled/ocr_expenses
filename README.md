@@ -39,16 +39,14 @@ Each invoice captures the following information:
 
 ### 🎯 Quick Start - No Terminal Required!
 
-**For non-technical users, we have easy launchers:**
+**For non-technical users, we have an easy launcher:**
 
 1. **Download/extract** the project folder
-2. **Double-click** the appropriate launcher for your system:
-   - **Windows**: `KERN1_Invoice_OCR.bat`
-   - **Mac**: `KERN1_Invoice_OCR.command`
-   - **Linux**: `KERN1_Invoice_OCR.desktop` or `launch_app.py`
-
-3. **Wait** for automatic setup (first run only, 3-5 minutes)
-4. **Browser opens automatically** - start processing invoices!
+2. **Double-click** `KERN1_Invoice_OCR.command`
+3. **First time only**: Right-click → Open (Mac security prompt)
+4. **Wait** for automatic setup (first run only, 3-5 minutes)
+5. **Browser opens automatically** - start processing invoices!
+6. **Next time**: Just double-click to start instantly!
 
 📖 **See [LAUNCHER_GUIDE.md](LAUNCHER_GUIDE.md) for detailed instructions and troubleshooting**
 

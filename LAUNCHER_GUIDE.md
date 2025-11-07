@@ -1,49 +1,21 @@
-# Easy Launcher Guide for Non-Technical Users
+# Easy Launcher Guide for Mac Users
 
 ## Quick Start (No Terminal Required!)
-
-### Windows Users 🪟
-
-1. **Find the file:** `KERN1_Invoice_OCR.bat` in your project folder
-2. **Double-click** the file
-3. **Wait** for the application to start (may take 1-2 minutes on first run)
-4. **Your browser will open automatically** with the application
-5. **Start processing invoices!**
-
-**Note:** A command window will stay open - don't close it! Closing it will stop the application.
 
 ### Mac Users 🍎
 
 1. **Find the file:** `KERN1_Invoice_OCR.command` in your project folder
-2. **Right-click** the file and select "Open" (first time only)
+2. **First time:** Right-click the file and select "Open"
 3. **Click "Open"** in the security dialog (Mac will ask permission first time)
-4. **Wait** for the application to start
+4. **Wait** for the application to start (3-5 minutes on first run)
 5. **Your browser will open automatically** at http://localhost:8501
 6. **Start processing invoices!**
 
-**Tip:** Next time, you can just double-click the file!
+**Next Time:** Just double-click the file - instant startup!
 
-###Linux Users 🐧
+**Note:** A Terminal window will stay open - don't close it! Closing it will stop the application.
 
-**Option 1: Double-Click Launcher**
-1. **Right-click** `launch_app.py` → "Properties" → "Permissions"
-2. **Check** "Allow executing file as program"
-3. **Double-click** `launch_app.py` to run
-
-**Option 2: Desktop Entry**
-1. Copy `KERN1_Invoice_OCR.desktop` to `~/Desktop/` or `~/.local/share/applications/`
-2. Make it executable: `chmod +x KERN1_Invoice_OCR.desktop`
-3. Double-click the icon on your desktop
-
-## Creating a Desktop Shortcut
-
-### Windows
-
-1. **Right-click** on `KERN1_Invoice_OCR.bat`
-2. Select **"Create shortcut"**
-3. **Drag the shortcut** to your Desktop
-4. **Rename** it to "KERN1 Invoice OCR" (optional)
-5. **Right-click** the shortcut → "Properties" → "Change Icon" (optional)
+## Creating a Desktop Shortcut (Optional)
 
 ### Mac
 
@@ -51,15 +23,6 @@
 2. Select **"Make Alias"**
 3. **Drag the alias** to your Desktop or Applications folder
 4. **Rename** it to "KERN1 Invoice OCR" (optional)
-
-### Linux
-
-1. **Copy** `KERN1_Invoice_OCR.desktop` to your Desktop:
-   ```bash
-   cp KERN1_Invoice_OCR.desktop ~/Desktop/
-   chmod +x ~/Desktop/KERN1_Invoice_OCR.desktop
-   ```
-2. **Double-click** to run!
 
 ## First Time Setup
 
@@ -79,21 +42,15 @@ The launcher automatically:
 - Python 3.8 or higher ([Download here](https://www.python.org/downloads/))
 - Tesseract OCR (for best results)
 
-**Installing Tesseract:**
+**Installing Tesseract (Mac):**
 
-**Windows:**
-1. Download from: https://github.com/UB-Mannheim/tesseract/wiki
-2. Run installer
-3. Restart computer
-
-**Mac:**
 ```bash
 brew install tesseract tesseract-lang
 ```
 
-**Linux (Ubuntu/Debian):**
+If you don't have Homebrew, install it first:
 ```bash
-sudo apt-get install tesseract-ocr tesseract-ocr-eng tesseract-ocr-nld
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
 ## Using the Application

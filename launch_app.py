@@ -25,6 +25,8 @@ def main():
 
     # Check if virtual environment exists
     venv_dir = app_dir / "venv"
+    needs_setup = False
+
     if not venv_dir.exists():
         print("⚠️  Setting up application for first time...")
         print("This may take a few minutes...")
@@ -35,6 +37,7 @@ def main():
         subprocess.run([sys.executable, "-m", "venv", str(venv_dir)], check=True)
         print("✅ Virtual environment created")
         print()
+        needs_setup = True
 
     # Get python executable from venv
     if sys.platform == "win32":
@@ -44,19 +47,37 @@ def main():
         python_exe = venv_dir / "bin" / "python"
         pip_exe = venv_dir / "bin" / "pip"
 
-    # Check if dependencies are installed
-    result = subprocess.run(
-        [str(python_exe), "-c", "import streamlit"],
-        capture_output=True
-    )
+    # Create a marker file to track if dependencies are installed
+    marker_file = venv_dir / ".dependencies_installed"
 
-    if result.returncode != 0:
+    # Check if dependencies are installed (use marker file for efficiency)
+    if not marker_file.exists() or needs_setup:
         print("📦 Installing dependencies...")
-        print("This may take a few minutes on first run...")
+        print("This may take a few minutes...")
         print()
-        subprocess.run([str(pip_exe), "install", "-r", "requirements.txt"], check=True)
-        print()
-        print("✅ Dependencies installed")
+
+        # Upgrade pip first
+        print("Upgrading pip...")
+        subprocess.run([str(python_exe), "-m", "pip", "install", "--upgrade", "pip"],
+                      capture_output=True, check=False)
+
+        # Install dependencies
+        result = subprocess.run([str(pip_exe), "install", "-r", "requirements.txt"],
+                               capture_output=False, check=False)
+
+        if result.returncode == 0:
+            # Create marker file
+            marker_file.touch()
+            print()
+            print("✅ Dependencies installed")
+            print()
+        else:
+            print()
+            print("⚠️  Some dependencies failed to install, but continuing anyway...")
+            print("The app may still work with reduced functionality.")
+            print()
+    else:
+        print("✅ Dependencies already installed (skipping)")
         print()
 
     # Create directories
