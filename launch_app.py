@@ -151,8 +151,19 @@ def main():
     # Create a marker file to track if dependencies are installed
     marker_file = venv_dir / ".dependencies_installed"
 
-    # Check if dependencies are installed (use marker file for efficiency)
-    if not marker_file.exists() or needs_setup:
+    # Verify that streamlit is actually installed (not just marker file check)
+    streamlit_installed = False
+    if marker_file.exists() and not needs_setup:
+        # Quick check if streamlit can be imported
+        test_result = subprocess.run(
+            [str(python_exe), "-c", "import streamlit"],
+            capture_output=True,
+            timeout=5
+        )
+        streamlit_installed = test_result.returncode == 0
+
+    # Install dependencies if needed
+    if not streamlit_installed or needs_setup:
         print("📦 Installing dependencies...")
         print("This may take a few minutes...")
         print()
