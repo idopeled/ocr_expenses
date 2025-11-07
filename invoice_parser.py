@@ -17,14 +17,16 @@ class InvoiceParser:
         """Initialize parser with patterns"""
         # Patterns for invoice number
         self.invoice_patterns = [
-            r'invoice\s*(?:#|no\.?|number|nr\.?)?\s*:?\s*([A-Z0-9\-\/]+)',
-            r'factuurnummer\s*:?\s*([A-Z0-9\-\/]+)',
-            r'factuur\s*(?:#|no\.?|nr\.?)?\s*:?\s*([A-Z0-9\-\/]+)',
-            r'(?:^|\s)INV[-\s]?([A-Z0-9\-\/]+)',
+            r'invoice\s*(?:#|no\.?|number|nr\.?)?\s*:?\s*([A-Z0-9\-\/\s]+)',
+            r'factuurnummer\s*:?\s*([A-Z0-9\-\/\s]+)',
+            r'factuur\s*(?:#|no\.?|nr\.?)?\s*:?\s*([A-Z0-9\-\/\s]+)',
+            r'(?:^|\s)INV[-\s]?([A-Z0-9\-\/\s]+)',
         ]
 
         # Patterns for dates
         self.date_patterns = [
+            r'date\s*(?:of\s*issue)?\s*:?\s*(\w+\s+\d{1,2}\s*,?\s*\d{4})',  # "April 9, 2025"
+            r'invoice\s*date\s*:?\s*(\w+\s+\d{1,2}\s*,?\s*\d{4})',
             r'date\s*:?\s*(\d{1,2}[-/\.]\d{1,2}[-/\.]\d{2,4})',
             r'datum\s*:?\s*(\d{1,2}[-/\.]\d{1,2}[-/\.]\d{2,4})',
             r'invoice\s*date\s*:?\s*(\d{1,2}[-/\.]\d{1,2}[-/\.]\d{2,4})',
@@ -44,6 +46,44 @@ class InvoiceParser:
             r'btw\s*(?:bedrag)?\s*:?\s*€?\s*(\d+[.,]\d{2})',
             r'tax\s*(?:amount)?\s*:?\s*€?\s*(\d+[.,]\d{2})',
         ]
+
+    def _normalize_spaced_text(self, text: str) -> str:
+        """
+        Normalize text that has excessive spaces between characters.
+        Some PDFs extract with spaces like "I n v o i c e" instead of "Invoice".
+        """
+        lines = text.split('\n')
+        normalized_lines = []
+
+        for line in lines:
+            words = line.split()
+            merged = []
+            buffer = []
+
+            for word in words:
+                # Check if word is a single character (letter, digit, or common punctuation)
+                if len(word) == 1:
+                    buffer.append(word)
+                else:
+                    # Multi-character word found
+                    # If we have accumulated 3+ single chars, merge them into one word
+                    if len(buffer) >= 3:
+                        merged.append(''.join(buffer))
+                    elif buffer:
+                        # Short sequence (1-2 chars), keep with spaces
+                        merged.extend(buffer)
+                    buffer = []
+                    merged.append(word)
+
+            # Handle remaining buffer at end of line
+            if len(buffer) >= 3:
+                merged.append(''.join(buffer))
+            elif buffer:
+                merged.extend(buffer)
+
+            normalized_lines.append(' '.join(merged))
+
+        return '\n'.join(normalized_lines)
 
     def parse(self, text: str, use_ai: bool = False) -> Dict[str, Optional[str]]:
         """
@@ -67,6 +107,10 @@ class InvoiceParser:
 
     def _parse_with_patterns(self, text: str) -> Dict[str, Optional[str]]:
         """Extract invoice data using regex patterns"""
+        # Normalize text by removing excessive spaces between characters
+        # This fixes PDFs that have spaces like "I n v o i c e" instead of "Invoice"
+        text = self._normalize_spaced_text(text)
+
         # Case-insensitive text for pattern matching
         text_lower = text.lower()
 
@@ -193,7 +237,10 @@ Be precise and extract exact values. If a field is not present, use UNKNOWN."""
             if match:
                 # Return from original text to preserve case
                 start, end = match.span(1)
-                return text[start:end].strip()
+                invoice_num = text[start:end].strip()
+                # Clean up extra spaces within the invoice number
+                invoice_num = re.sub(r'\s+', ' ', invoice_num)
+                return invoice_num
         return None
 
     def _extract_date(self, text: str, text_lower: str) -> Optional[str]:
